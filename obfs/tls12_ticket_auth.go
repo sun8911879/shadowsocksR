@@ -206,7 +206,6 @@ func (t *tls12TicketAuth) Encode(data []byte) (encodedData []byte, err error) {
 	return
 }
 
-//return (outData []byte, length uint64, err error)
 func (t *tls12TicketAuth) Decode(data []byte) ([]byte, uint64, error) {
 	if t.handshakeStatus == -1 {
 		return data, 0, nil
@@ -214,7 +213,7 @@ func (t *tls12TicketAuth) Decode(data []byte) ([]byte, uint64, error) {
 	dataLength := len(data)
 
 	if t.handshakeStatus == 8 {
-		if !hmac.Equal(data[0:3], []byte{0x17, 0x3, 0x3}) {
+		if data[0] != 0x17 {
 			return nil, 0, ssr.ErrTLS12TicketAuthIncorrectMagicNumber
 		}
 		size := int(binary.BigEndian.Uint16(data[3:5]))

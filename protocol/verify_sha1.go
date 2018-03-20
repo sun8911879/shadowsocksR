@@ -96,6 +96,6 @@ func (v *verifySHA1) PreEncrypt(data []byte) (encryptedData []byte, err error) {
 	return
 }
 
-func (v *verifySHA1) PostDecrypt(data []byte) (decryptedData []byte, err error) {
-	return data, nil
+func (v *verifySHA1) PostDecrypt(data []byte) ([]byte, int, error) {
+	return data, 0, nil
 }

@@ -241,39 +241,42 @@ func (a *authAES128) PreEncrypt(plainData []byte) (outData []byte, err error) {
 	return
 }
 
-func (a *authAES128) PostDecrypt(plainData []byte) ([]byte, error) {
+func (a *authAES128) PostDecrypt(plainData []byte) ([]byte, int, error) {
 	a.buffer.Reset()
 	plainLength := len(plainData)
+	datalength := plainLength
+	readlenth := 0
 	key := make([]byte, len(a.userKey)+4)
 	copy(key, a.userKey)
 	for plainLength > 4 {
 		binary.LittleEndian.PutUint32(key[len(key)-4:], a.recvID)
 
 		h := a.hmac(key, plainData[0:2])
-
 		if h[0] != plainData[2] || h[1] != plainData[3] {
-			return nil, ssr.ErrAuthAES128HMACError
+			return nil, 0, ssr.ErrAuthAES128HMACError
 		}
-
 		length := int(binary.LittleEndian.Uint16(plainData[0:2]))
 		if length >= 8192 || length < 8 {
-			return nil, ssr.ErrAuthAES128DataLengthError
+			return nil, 0, ssr.ErrAuthAES128DataLengthError
 		}
-
 		if length > plainLength {
 			break
 		}
-
 		a.recvID++
 		pos := int(plainData[4])
-		if pos != 0xFF {
+		if pos < 255 {
 			pos += 4
 		} else {
-			pos = int(binary.LittleEndian.Uint16(plainData[5:5+2])) + 4
+			pos = int(binary.LittleEndian.Uint16(plainData[5:7])) + 4
 		}
+
 		a.buffer.Write(plainData[pos : length-4])
 		plainData = plainData[length:]
 		plainLength -= length
+		readlenth += length
 	}
-	return a.buffer.Bytes(), nil
+	if datalength == readlenth {
+		readlenth = -1
+	}
+	return a.buffer.Bytes(), readlenth, nil
 }

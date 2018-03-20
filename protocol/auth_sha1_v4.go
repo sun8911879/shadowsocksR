@@ -185,7 +185,8 @@ func (a *authSHA1v4) PreEncrypt(plainData []byte) (outData []byte, err error) {
 	return
 }
 
-func (a *authSHA1v4) PostDecrypt(plainData []byte) (outData []byte, err error) {
+func (a *authSHA1v4) PostDecrypt(plainData []byte) ([]byte, int, error) {
+	var outData []byte
 	dataLength := len(plainData)
 	b := make([]byte, len(a.recvBuffer)+dataLength)
 	copy(b, a.recvBuffer)
@@ -195,13 +196,13 @@ func (a *authSHA1v4) PostDecrypt(plainData []byte) (outData []byte, err error) {
 	for a.recvBufferLength > 4 {
 		crc32 := ssr.CalcCRC32(a.recvBuffer, 2, 0xFFFFFFFF)
 		if binary.LittleEndian.Uint16(a.recvBuffer[2:4]) != uint16(crc32&0xFFFF) {
-			return nil, ssr.ErrAuthSHA1v4CRC32Error
+			return nil, 0, ssr.ErrAuthSHA1v4CRC32Error
 		}
 		length := int(binary.BigEndian.Uint16(a.recvBuffer[0:2]))
 		if length >= 8192 || length < 8 {
 			a.recvBufferLength = 0
 			a.recvBuffer = nil
-			return nil, ssr.ErrAuthSHA1v4DataLengthError
+			return nil, 0, ssr.ErrAuthSHA1v4DataLengthError
 		}
 		if length > a.recvBufferLength {
 			break
@@ -224,8 +225,8 @@ func (a *authSHA1v4) PostDecrypt(plainData []byte) (outData []byte, err error) {
 		} else {
 			a.recvBufferLength = 0
 			a.recvBuffer = nil
-			return nil, ssr.ErrAuthSHA1v4IncorrectChecksum
+			return nil, 0, ssr.ErrAuthSHA1v4IncorrectChecksum
 		}
 	}
-	return
+	return outData, 0, nil
 }

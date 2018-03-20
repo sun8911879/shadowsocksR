@@ -16,24 +16,28 @@ type SSTCPConn struct {
 	net.Conn
 	sync.RWMutex
 	*StreamCipher
-	IObfs         obfs.IObfs
-	IProtocol     protocol.IProtocol
-	readBuf       []byte
-	readDecodeBuf *bytes.Buffer
-	readIndex     uint64
-	readUserBuf   *bytes.Buffer
-	writeBuf      []byte
-	lastReadError error
+	IObfs          obfs.IObfs
+	IProtocol      protocol.IProtocol
+	readBuf        []byte
+	readDecodeBuf  *bytes.Buffer
+	readIObfsBuf   *bytes.Buffer
+	readEncryptBuf *bytes.Buffer
+	readIndex      uint64
+	readUserBuf    *bytes.Buffer
+	writeBuf       []byte
+	lastReadError  error
 }
 
 func NewSSTCPConn(c net.Conn, cipher *StreamCipher) *SSTCPConn {
 	return &SSTCPConn{
-		Conn:          c,
-		StreamCipher:  cipher,
-		readBuf:       leakybuf.GlobalLeakyBuf.Get(),
-		readDecodeBuf: bytes.NewBuffer(nil),
-		readUserBuf:   bytes.NewBuffer(nil),
-		writeBuf:      leakybuf.GlobalLeakyBuf.Get(),
+		Conn:           c,
+		StreamCipher:   cipher,
+		readBuf:        leakybuf.GlobalLeakyBuf.Get(),
+		readDecodeBuf:  bytes.NewBuffer(nil),
+		readIObfsBuf:   bytes.NewBuffer(nil),
+		readUserBuf:    bytes.NewBuffer(nil),
+		readEncryptBuf: bytes.NewBuffer(nil),
+		writeBuf:       leakybuf.GlobalLeakyBuf.Get(),
 	}
 }
 
@@ -85,7 +89,8 @@ func (c *SSTCPConn) Read(b []byte) (n int, err error) {
 	}
 	//未读取够长度继续读取并解码
 	decodelength := c.readDecodeBuf.Len()
-	if (decodelength == 0 || (c.readIndex != 0 && c.readIndex > uint64(decodelength))) && c.lastReadError == nil {
+	if (decodelength == 0 || c.readEncryptBuf.Len() > 0 || (c.readIndex != 0 && c.readIndex > uint64(decodelength))) && c.lastReadError == nil {
+		c.readIndex = 0
 		n, c.lastReadError = c.Conn.Read(c.readBuf)
 		//写入decode 缓存
 		c.readDecodeBuf.Write(c.readBuf[0:n])
@@ -97,9 +102,10 @@ func (c *SSTCPConn) Read(b []byte) (n int, err error) {
 	decodelength = c.readDecodeBuf.Len()
 	decodebytes := c.readDecodeBuf.Bytes()
 	c.readDecodeBuf.Reset()
-	for {
-		decodedData, length, err := c.IObfs.Decode(decodebytes)
 
+	for {
+
+		decodedData, length, err := c.IObfs.Decode(decodebytes)
 		if length == 0 && err != nil {
 			return 0, err
 		}
@@ -110,34 +116,36 @@ func (c *SSTCPConn) Read(b []byte) (n int, err error) {
 			return 0, nil
 		}
 
-		//未读取完全数据
+		//数据不够长度
 		if err != nil && length > 5 {
 			if uint64(decodelength) > length {
 				return 0, fmt.Errorf("data length: %d,decode data length: %d unknown panic", decodelength, length)
 			}
 			c.readIndex = length
-			//c.readDecodeBuf.Write(decodebytes)
+			c.readDecodeBuf.Write(decodebytes)
+			if c.readIObfsBuf.Len() == 0 {
+				return 0, nil
+			}
 			break
 		}
-		//完全读取数据
-		if length == 0 {
-			c.readDecodeBuf.Write(decodedData)
-			decodebytes = decodebytes[:0]
+
+		if length > 1 {
+			//读出数据 但是有多余的数据 返回已经读取数值
+			c.readIObfsBuf.Write(decodedData)
+			decodebytes = decodebytes[length:]
 			decodelength = len(decodebytes)
-			break
+			continue
 		}
-		c.readDecodeBuf.Write(decodedData)
-		decodebytes = decodebytes[length:]
-		decodelength = len(decodebytes)
-		if decodelength < 5 {
-			break
-		}
+
+		//完全读取数据 --	length == 0
+		c.readIObfsBuf.Write(decodedData)
+		break
 	}
-	decodedData := c.readDecodeBuf.Bytes()
-	decodelength = c.readDecodeBuf.Len()
-	c.readDecodeBuf.Reset()
-	c.readDecodeBuf.Write(decodebytes)
-	//Protocol decrypt
+
+	decodedData := c.readIObfsBuf.Bytes()
+	decodelength = c.readIObfsBuf.Len()
+	c.readIObfsBuf.Reset()
+
 	if c.dec == nil {
 		iv := decodedData[0:c.info.ivLen]
 		if err = c.initDecrypt(iv); err != nil {
@@ -154,10 +162,22 @@ func (c *SSTCPConn) Read(b []byte) (n int, err error) {
 	buf := make([]byte, decodelength)
 	c.decrypt(buf, decodedData)
 
-	postDecryptedData, err := c.IProtocol.PostDecrypt(buf)
+	c.readEncryptBuf.Write(buf)
+	encryptbuf := c.readEncryptBuf.Bytes()
+	c.readEncryptBuf.Reset()
+	postDecryptedData, length, err := c.IProtocol.PostDecrypt(encryptbuf)
 	if err != nil {
 		return 0, err
 	}
+	if length == 0 {
+		c.readEncryptBuf.Write(encryptbuf)
+		return 0, nil
+	}
+
+	if length > 0 {
+		c.readEncryptBuf.Write(encryptbuf[length:])
+	}
+
 	postDecryptedlength := len(postDecryptedData)
 	blength := len(b)
 	copy(b, postDecryptedData)

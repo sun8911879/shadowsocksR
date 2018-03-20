@@ -15,8 +15,8 @@ var (
 type IProtocol interface {
 	SetServerInfo(s *ssr.ServerInfoForObfs)
 	GetServerInfo() *ssr.ServerInfoForObfs
-	PreEncrypt(data []byte) (encryptedData []byte, err error)
-	PostDecrypt(data []byte) (decryptedData []byte, err error)
+	PreEncrypt(data []byte) ([]byte, error)
+	PostDecrypt(data []byte) ([]byte, int, error)
 	SetData(data interface{})
 	GetData() interface{}
 }

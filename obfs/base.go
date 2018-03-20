@@ -15,7 +15,7 @@ var (
 type IObfs interface {
 	SetServerInfo(s *ssr.ServerInfoForObfs)
 	GetServerInfo() (s *ssr.ServerInfoForObfs)
-	Encode(data []byte) (encodedData []byte, err error)
+	Encode(data []byte) ([]byte, error)
 	Decode(data []byte) ([]byte, uint64, error)
 	SetData(data interface{})
 	GetData() interface{}
