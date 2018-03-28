@@ -117,7 +117,7 @@ func (c *SSTCPConn) Read(b []byte) (n int, err error) {
 		}
 
 		//数据不够长度
-		if err != nil && length > 5 {
+		if err != nil {
 			if uint64(decodelength) > length {
 				return 0, fmt.Errorf("data length: %d,decode data length: %d unknown panic", decodelength, length)
 			}
@@ -129,7 +129,7 @@ func (c *SSTCPConn) Read(b []byte) (n int, err error) {
 			break
 		}
 
-		if length > 1 {
+		if length >= 1 {
 			//读出数据 但是有多余的数据 返回已经读取数值
 			c.readIObfsBuf.Write(decodedData)
 			decodebytes = decodebytes[length:]
