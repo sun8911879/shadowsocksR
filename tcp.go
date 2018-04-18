@@ -83,6 +83,15 @@ func (c *SSTCPConn) initEncryptor(b []byte) (iv []byte, err error) {
 }
 
 func (c *SSTCPConn) Read(b []byte) (n int, err error) {
+	for {
+		n, err = c.doRead(b)
+		if b == nil || n != 0 || err != nil {
+			return n, err
+		}
+	}
+}
+
+func (c *SSTCPConn) doRead(b []byte) (n int, err error) {
 	//先吐出已经解密后数据
 	if c.readUserBuf.Len() > 0 {
 		return c.readUserBuf.Read(b)
@@ -156,6 +165,9 @@ func (c *SSTCPConn) Read(b []byte) (n int, err error) {
 			c.iv = iv
 		}
 		decodelength -= c.info.ivLen
+		if decodelength <= 0 {
+			return 0, nil
+		}
 		decodedData = decodedData[c.info.ivLen:]
 	}
 
@@ -231,6 +243,9 @@ func (c *SSTCPConn) Write(b []byte) (n int, err error) {
 	outData, err := c.preWrite(b)
 	if err == nil {
 		n, err = c.Conn.Write(outData)
+		if err != nil {
+			return n, err
+		}
 	}
-	return
+	return len(b), nil
 }
