@@ -105,7 +105,7 @@ func (c *SSTCPConn) doRead(b []byte) (n int, err error) {
 		c.readDecodeBuf.Write(c.readBuf[0:n])
 	}
 	//无缓冲数据返回错误
-	if c.lastReadError != nil && decodelength == 0 {
+	if c.lastReadError != nil && (decodelength == 0 || uint64(decodelength) < c.readIndex) {
 		return 0, c.lastReadError
 	}
 	decodelength = c.readDecodeBuf.Len()
@@ -127,7 +127,7 @@ func (c *SSTCPConn) doRead(b []byte) (n int, err error) {
 
 		//数据不够长度
 		if err != nil {
-			if uint64(decodelength) > length {
+			if uint64(decodelength) >= length {
 				return 0, fmt.Errorf("data length: %d,decode data length: %d unknown panic", decodelength, length)
 			}
 			c.readIndex = length

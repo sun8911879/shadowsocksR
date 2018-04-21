@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sun8911879/shadowsocksR/obfs"
 	"github.com/sun8911879/shadowsocksR/protocol"
@@ -22,6 +23,7 @@ func NewSSRClient(u *url.URL) (*SSTCPConn, error) {
 	}
 
 	dialer := net.Dialer{
+		Timeout:   time.Millisecond * 500,
 		DualStack: true,
 	}
 	conn, err := dialer.Dial("tcp", u.Host)
