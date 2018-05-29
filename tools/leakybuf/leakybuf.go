@@ -40,8 +40,8 @@ func (lb *LeakyBuf) Put(b []byte) {
 }
 
 const (
-	GlobalLeakyBufSize = 4108 // data.len(2) + hmacsha1(10) + data(4096)
-	maxNBuf            = 2048
+	GlobalLeakyBufSize = 32 * 1024 // data.len(2) + hmacsha1(10) + data(4096)
+	maxNBuf            = 8192
 )
 
 var GlobalLeakyBuf = NewLeakyBuf(maxNBuf, GlobalLeakyBufSize)

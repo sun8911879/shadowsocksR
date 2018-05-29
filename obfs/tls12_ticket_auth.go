@@ -213,6 +213,9 @@ func (t *tls12TicketAuth) Decode(data []byte) ([]byte, uint64, error) {
 	dataLength := len(data)
 
 	if t.handshakeStatus == 8 {
+		if dataLength < 5 {
+			return nil, 5, fmt.Errorf("data need minimum length: 5 ,data only length: %d", dataLength)
+		}
 		if data[0] != 0x17 {
 			return nil, 0, ssr.ErrTLS12TicketAuthIncorrectMagicNumber
 		}
